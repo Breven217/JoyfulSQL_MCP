@@ -28,7 +28,7 @@ Cascade can automatically start and manage the server. Configure Cascade by addi
       "mysql": {
           "command": "node",
           "args": [
-            "/Users/[user]/repos/MySql_MCP/build/index.js" // Path to the server
+            "/Users/[user]/repos/MySQL_MCP_Server/build/index.js" // Path to the server
           ],
           "env": {
             "MYSQL_HOST": "[host]",
