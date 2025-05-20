@@ -29,11 +29,15 @@ const server = new McpServer({
     resources: {},
     tools: {
       local_mysql_query: {
-        description: "Execute a SQL query on the MySQL database",
+        description: "Execute a SQL query on the local MySQL database",
         parameters: {
           sql: {
             type: "string",
             description: "SQL query to execute",
+          },
+          database: {
+            type: "string",
+            description: "Database to query (if not specified, will show available databases)",
           },
           params: {
             type: "array",
@@ -53,7 +57,7 @@ const server = new McpServer({
           },
           database: {
             type: "string",
-            description: "Database to query (if not specified, query 'information_schema' to show available databases)",
+            description: "Database to query (if not specified, will show available databases)",
           },
           sshHost: {
             type: "string",

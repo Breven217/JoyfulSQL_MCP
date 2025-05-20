@@ -8,6 +8,7 @@ A Model Context Protocol (MCP) server that allows AI assistants like Cascade to 
 - Connect to remote MySQL databases via SSH tunneling (ODI)
 - Execute read-only or read-write queries (configurable)
 - Secure access through SSH tunneling for remote databases
+- Automatic database detection and listing when no database is specified
 
 ## Setup
 
@@ -45,7 +46,6 @@ Cascade can automatically start and manage the server. Configure Cascade by addi
             "LOCAL_HOST": "localhost",
             "LOCAL_USER": "[user]",
             "LOCAL_PASSWORD": "[password]",
-            "LOCAL_DATABASE": "[database]",
             "LOCAL_PORT": "3306",
             
             // ODI MySQL Configuration (for remote access via SSH)
@@ -69,6 +69,7 @@ This MCP server provides two main tools:
    ```
    Parameters:
    - sql: SQL query to execute
+   - database: (optional) Database to query - if not specified, will show available databases
    - params: (optional) Parameters for the SQL query
    ```
 
@@ -76,7 +77,7 @@ This MCP server provides two main tools:
    ```
    Parameters:
    - sql: SQL query to execute
-   - database: Database to query (use 'information_schema' to see available databases)
+   - database: (optional) Database to query - if not specified, will show available databases
    - sshHost: SSH host to connect through (e.g., "171831.bjoyner.pandasandbox.com")
    - params: (optional) Parameters for the SQL query
    ```
@@ -105,6 +106,16 @@ This MCP server provides two main tools:
 
 ## Examples
 
+### List all available databases
+```
+// Using the local_mysql_query tool without specifying a database
+sql: "SHOW TABLES;"
+
+// Using the odi_mysql_query tool without specifying a database
+sql: "SHOW TABLES;"
+sshHost: "your-odi-host.example.com"
+```
+
 ### List all databases on an ODI server
 ```
 // Using the odi_mysql_query tool
@@ -119,6 +130,13 @@ sshHost: "your-odi-host.example.com"
 sql: "SELECT * FROM your_table LIMIT 10;"
 database: "your_database_name"
 sshHost: "your-odi-host.example.com"
+```
+
+### Query a specific database locally
+```
+// Using the local_mysql_query tool
+sql: "SELECT * FROM your_table LIMIT 10;"
+database: "your_database_name"
 ```
 
 ## Security
