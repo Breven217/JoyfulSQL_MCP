@@ -1,37 +1,17 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import mysql from "mysql2/promise";
+import { isDataModifyingOperation } from "../helpers/util.js";
 
 // Create a connection pool to improve performance
 let pool: mysql.Pool | null = null;
-
-// Helper function to detect data-modifying SQL operations
-function isDataModifyingOperation(sql: string): boolean {
-  const sqlLower = sql.trim().toLowerCase();
-  
-  // Operations that modify data
-  const dataModifyingPatterns = [
-    /^\s*create\s/i,
-    /^\s*update\s/i,
-    /^\s*insert\s/i,
-    /^\s*delete\s/i,
-    /^\s*replace\s/i,
-    /^\s*drop\s/i,
-    /^\s*truncate\s/i,
-    /^\s*alter\s/i,
-    /^\s*grant\s/i,
-    /^\s*revoke\s/i
-  ];
-
-  return dataModifyingPatterns.some(pattern => pattern.test(sqlLower));
-}
 
 export default (server: McpServer, config: any) => {
 	pool = mysql.createPool(config);
 
 	server.tool(
-		"mysql_query",
-		"Execute a SQL query on the MySQL database",
+		"local_mysql_query",
+		"Execute a SQL query on the local MySQL database",
 		{
 			sql: z.string().describe("SQL query to execute"),
 			params: z.array(z.string()).optional().describe("Parameters for the SQL query (optional)"),
@@ -41,7 +21,7 @@ export default (server: McpServer, config: any) => {
 		const isDataModifying = isDataModifyingOperation(sql);
 
 		// AI agents cannot run data-modifying operations
-		if (isDataModifying) {
+		if (isDataModifying && !config.writeAccess) {
 			return {
 				content: [
 					{

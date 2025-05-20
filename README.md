@@ -1,19 +1,27 @@
 # MySQL MCP Server
 
-A Model Context Protocol (MCP) server that allows AI assistants like Cascade to interact with your MySQL database in a read-only manner.
+A Model Context Protocol (MCP) server that allows AI assistants like Cascade to interact with both local and remote MySQL databases.
+
+## Features
+
+- Connect to local MySQL databases
+- Connect to remote MySQL databases via SSH tunneling (ODI)
+- Execute read-only or read-write queries (configurable)
+- Secure access through SSH tunneling for remote databases
 
 ## Setup
 
 ### Prerequisites
 
 - Node.js
-- MySQL database
+- Local MySQL database (optional)
+- SSH access to remote MySQL databases (optional)
 
 ### Installation
 
 Install dependencies and build:
 ```
-   make install
+make install
 ```
 
 ## Usage
@@ -31,16 +39,47 @@ Cascade can automatically start and manage the server. Configure Cascade by addi
             "/Users/[user]/repos/MySQL_MCP_Server/build/index.js" // Path to the server
           ],
           "env": {
-            "MYSQL_HOST": "[host]",
-            "MYSQL_USER": "[user]",
-            "MYSQL_PASSWORD": "[password]",
-            "MYSQL_DATABASE": "[database]",
-            "MYSQL_PORT": "[port]",
+            "WRITE_ACCESS": "true", // Set to "false" for read-only access
+            
+            // Local MySQL Configuration
+            "LOCAL_HOST": "localhost",
+            "LOCAL_USER": "[user]",
+            "LOCAL_PASSWORD": "[password]",
+            "LOCAL_DATABASE": "[database]",
+            "LOCAL_PORT": "3306",
+            
+            // ODI MySQL Configuration (for remote access via SSH)
+            "ODI_SSH_KEY": "/path/to/.ssh/id_rsa",
+            "ODI_USER": "[user]",
+            "ODI_PASSWORD": "[password]",
+            "ODI_HOST": "127.0.0.1",
+            "ODI_PORT": "3306",
+            "ODI_SSH_PORT": "22"
           }
       }
   }
 }
 ```
+
+### Available Tools
+
+This MCP server provides two main tools:
+
+1. **local_mysql_query** - Execute queries on your local MySQL database
+   ```
+   Parameters:
+   - sql: SQL query to execute
+   - params: (optional) Parameters for the SQL query
+   ```
+
+2. **odi_mysql_query** - Execute queries on remote MySQL databases via SSH tunnel
+   ```
+   Parameters:
+   - sql: SQL query to execute
+   - database: Database to query (use 'information_schema' to see available databases)
+   - sshHost: SSH host to connect through (e.g., "171831.bjoyner.pandasandbox.com")
+   - params: (optional) Parameters for the SQL query
+   ```
 
 ### Using Manually
 
@@ -64,6 +103,24 @@ Cascade can automatically start and manage the server. Configure Cascade by addi
    make query SQL="SELECT * FROM your_table"
    ```
 
+## Examples
+
+### List all databases on an ODI server
+```
+// Using the odi_mysql_query tool
+sql: "SELECT SCHEMA_NAME FROM SCHEMATA;"
+database: "information_schema"
+sshHost: "your-odi-host.example.com"
+```
+
+### Query a specific database on ODI
+```
+// Using the odi_mysql_query tool
+sql: "SELECT * FROM your_table LIMIT 10;"
+database: "your_database_name"
+sshHost: "your-odi-host.example.com"
+```
+
 ## Security
 
-This server is intended for local development only. Do not expose it to the internet without proper security measures.
+This server is intended for local development only. Do not expose it to the internet without proper security measures. The SSH tunneling provides an additional layer of security for remote database access.
