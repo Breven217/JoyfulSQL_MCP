@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import mysql from "mysql2/promise";
 import { spawn } from 'child_process';
-import { isDataModifyingOperation, getAvailableDatabases, createNoDatabaseResponse } from "../helpers/util.js";
+import { getAvailableDatabases, createNoDatabaseResponse, performQuery } from "../helpers/util.js";
 
 // Store connection pools by database name
 let connectionPools: Map<string, mysql.Pool> = new Map();
@@ -119,11 +119,6 @@ async function createSshTunnelConnection(config: any, sshHost: string, database:
   });
 }
 
-// Global error handler to prevent crashes
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
-});
-
 // Function to clean up all connections and SSH tunnels
 async function cleanupConnections() {
   // Close all connection pools
@@ -149,6 +144,10 @@ async function cleanupConnections() {
   sshClients.clear();
 }
 
+// Global error handler to prevent crashes
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+});
 // Register cleanup handler for process exit
 process.on('exit', () => {
   cleanupConnections();
@@ -166,88 +165,37 @@ export default (server: McpServer, config: any) => {
 
   server.tool(
     "odi_mysql_query",
-    "Execute a SQL query on the ODI MySQL database through SSH tunnel",
     {
       sql: z.string().describe("SQL query to execute"),
       database: z.string().optional().describe("Database to query (if not specified, will show available databases)"),
       sshHost: z.string().describe("SSH host to connect through (required)"),
       params: z.array(z.string()).optional().describe("Parameters for the SQL query (optional)"),
     },
+    {title: "Execute a SQL query on the ODI MySQL database through SSH tunnel"},
     async ({ sql, params, database, sshHost }) => {
       // If no database was specified, query information_schema to get available databases
+      // and return early to wait for the user to specify a database
       if (!database) {
         try {
           const databases = await getAvailableDatabasesViaSsh(config, sshHost);
+          // Return the list of available databases and require user action before proceeding
           return createNoDatabaseResponse(databases);
         } catch (error) {
           return {
             content: [
               {
                 type: "text",
-                text: JSON.stringify({ error: "Failed to retrieve available databases. Please specify a database name explicitly." }, null, 2),
-              },
+                text: "⚠️ Error retrieving databases. Please specify a database name explicitly."
+              }
             ],
+            requires_action: true
           };
         }
       }
       try {
         // Create or reuse SSH tunnel and get the connection pool
         const tunnelPool = await createSshTunnelConnection(config, sshHost, database);
-        
-        // Check if the operation modifies data
-        const isDataModifying = isDataModifyingOperation(sql);
-
-        // AI agents cannot run data-modifying operations
-        if (isDataModifying && !config.writeAccess) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: "⚠️ This SQL operation modifies data and cannot be run. \n\n" +
-                      "SQL: " + sql
-              },
-            ],
-          };
-        }
-
-        try {
-          const [rows] = await tunnelPool.execute(sql, params || []);
-          
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(rows, null, 2),
-              },
-            ],
-          };
-        } catch (error: unknown) {            
-          let errorResponse: { error: string; code?: string; sqlState?: string } = {
-            error: "Unknown database error"
-          };
-          
-          if (error instanceof Error) {
-            errorResponse.error = error.message;
-            
-            if ('code' in error) {
-              errorResponse.code = (error as any).code;
-            }
-            if ('sqlState' in error) {
-              errorResponse.sqlState = (error as any).sqlState;
-            }
-          } else {
-            errorResponse.error = String(error);
-          }
-          
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(errorResponse, null, 2),
-              },
-            ],
-          };
-        }
+        return await performQuery(tunnelPool, sql, params);
       } catch (error: unknown) {
         // Handle errors from SSH connection or setup
         let errorMessage = "Failed to establish SSH connection";

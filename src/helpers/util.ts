@@ -1,7 +1,7 @@
 import mysql from "mysql2/promise";
 
 // Helper function to detect data-modifying SQL operations
-export function isDataModifyingOperation(sql: string): boolean {
+function isDataModifyingOperation(sql: string): boolean {
   const sqlLower = sql.trim().toLowerCase();
   
   // Operations that modify data
@@ -44,15 +44,74 @@ export async function getAvailableDatabases(pool: mysql.Pool): Promise<string[]>
  * @returns Response object with formatted message
  */
 export function createNoDatabaseResponse(databases: string[]) {
-  const instructions = "To use a database, include the 'database' parameter in your query.";
+  const instructions = "To use a database, include the 'database' parameter in your query and run the tool again.";
   return {
     content: [
       {
         type: "text" as const,
         text: "⚠️ No database specified. Please specify one of the following databases:\n\n" +
               databases.map(db => `- ${db}`).join('\n') + "\n\n" +
-              instructions
+              instructions + "\n\n" +
+              "Operation halted. You must specify a database to proceed."
       },
     ],
+    requires_action: true
   };
+}
+
+export async function performQuery(pool: mysql.Pool, sql: string, params: string[] | undefined) {
+  // Check if the operation modifies data
+  const isDataModifying = isDataModifyingOperation(sql);
+
+  // AI agents cannot run data-modifying operations unless WRITE_ACCESS is set to true
+  if (isDataModifying && process.env.WRITE_ACCESS !== "true") {
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: "⚠️ This SQL operation modifies data and cannot be run. \n\n" +
+                "SQL: " + sql
+        },
+      ],
+    };
+  }
+
+  try {
+    const [rows] = await pool.execute(sql, params || []);
+    
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify(rows, null, 2),
+        },
+      ],
+    };
+  } catch (error: unknown) {            
+    let errorResponse: { error: string; code?: string; sqlState?: string } = {
+      error: "Unknown database error"
+    };
+    
+    if (error instanceof Error) {
+      errorResponse.error = error.message;
+      
+      if ('code' in error) {
+        errorResponse.code = (error as any).code;
+      }
+      if ('sqlState' in error) {
+        errorResponse.sqlState = (error as any).sqlState;
+      }
+    } else {
+      errorResponse.error = String(error);
+    }
+    
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify(errorResponse, null, 2),
+        },
+      ],
+    };
+  }
 }

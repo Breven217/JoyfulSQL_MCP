@@ -9,6 +9,7 @@ A Model Context Protocol (MCP) server that allows AI assistants like Cascade to 
 - Execute read-only or read-write queries (configurable)
 - Secure access through SSH tunneling for remote databases
 - Automatic database detection and listing when no database is specified
+- Interactive workflow that waits for user to select a database before proceeding
 
 ## Setup
 
@@ -105,6 +106,15 @@ This MCP server provides two main tools:
    ```
 
 ## Examples
+
+### Interactive Database Selection
+
+When no database is specified, the server will:
+1. List all available databases on the target MySQL server
+2. Halt execution and wait for the user to specify a database
+3. Require the user to run the tool again with the `database` parameter explicitly set
+
+This interactive workflow prevents executing queries without a properly selected database and gives the user clear guidance on how to proceed.
 
 ### List all available databases
 ```

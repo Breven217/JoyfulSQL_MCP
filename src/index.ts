@@ -5,7 +5,6 @@ import odiQueryTools from "./tools/odiQuery.js";
 
 // Get configuration from environment variables
 const localConfig = {
-  writeAccess: process.env.WRITE_ACCESS === "true",
   host: process.env.LOCAL_HOST,
   port: parseInt(process.env.LOCAL_PORT || ''),
   user: process.env.LOCAL_USER,
@@ -13,7 +12,6 @@ const localConfig = {
   database: process.env.LOCAL_DATABASE,
 };
 const odiConfig = {
-  writeAccess: process.env.WRITE_ACCESS === "true",
   host: process.env.ODI_HOST,
   port: parseInt(process.env.ODI_PORT || ''),
   user: process.env.ODI_USER,
