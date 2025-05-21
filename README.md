@@ -52,6 +52,7 @@ Cascade can automatically start and manage the server. Configure Cascade by addi
           "args": [
             "run",
             "--rm",
+            "-i",
             "--env-file",
             "/path/to/your/env",
             "ghcr.io/breven217/mysql_mcp_server:latest"
