@@ -29,7 +29,7 @@ function isDataModifyingOperation(sql: string): boolean {
  */
 export async function getAvailableDatabases(pool: mysql.Pool): Promise<string[]> {
   try {
-    const [rows] = await pool.execute('SELECT SCHEMA_NAME FROM SCHEMATA WHERE SCHEMA_NAME NOT IN ("information_schema", "mysql", "performance_schema", "sys")') as [any[], any];
+    const [rows] = await pool.execute('SELECT SCHEMA_NAME FROM SCHEMATA WHERE SCHEMA_NAME LIKE "%company_%"') as [any[], any];
     return rows.map((row: any) => row.SCHEMA_NAME);
   } catch (error) {
     console.error('Error getting available databases:', error);
@@ -44,15 +44,16 @@ export async function getAvailableDatabases(pool: mysql.Pool): Promise<string[]>
  * @returns Response object with formatted message
  */
 export function createNoDatabaseResponse(databases: string[]) {
-  const instructions = "To use a database, include the 'database' parameter in your query and run the tool again.";
+  const text = databases.length > 0 
+    ? "⚠️ No database specified. Please specify one of the following databases:\n\n" +
+      databases.map(db => `- ${db}`).join('\n') + "\n\n" +
+      "To use a database, include the 'database' parameter in your query and run the tool again."
+    : "⚠️ No database specified, please specify a database name explicitly.  Query information_schema to get available databases.";
   return {
     content: [
       {
         type: "text" as const,
-        text: "⚠️ No database specified. Please specify one of the following databases:\n\n" +
-              databases.map(db => `- ${db}`).join('\n') + "\n\n" +
-              instructions + "\n\n" +
-              "Operation halted. You must specify a database to proceed."
+        text: text
       },
     ],
     requires_action: true

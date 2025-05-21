@@ -2,6 +2,41 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import queryTools from "./tools/query.js";
 import odiQueryTools from "./tools/odiQuery.js";
+import fs from 'fs';
+import path from 'path';
+
+// Parse command line arguments
+const args = process.argv.slice(2);
+let envFilePath = '';
+
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === '--env-file' && i + 1 < args.length) {
+    envFilePath = args[i + 1];
+    break;
+  }
+}
+
+// Load environment variables from file if specified
+if (envFilePath) {
+  try {
+    const envFileContent = fs.readFileSync(envFilePath, 'utf8');
+    const envVars = envFileContent.split('\n');
+    
+    for (const line of envVars) {
+      // Skip empty lines and comments
+      if (!line || line.startsWith('#')) continue;
+      
+      const [key, value] = line.split('=');
+      if (key && value) {
+        process.env[key.trim()] = value.trim();
+      }
+    }
+    
+    console.log(`Loaded environment variables from ${envFilePath}`);
+  } catch (error) {
+    console.error(`Error loading environment file: ${error}`);
+  }
+}
 
 // Get configuration from environment variables
 const localConfig = {
