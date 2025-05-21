@@ -2,6 +2,13 @@
 
 A Model Context Protocol (MCP) server that allows AI assistants like Cascade to interact with both local and remote MySQL databases.
 
+## Quick Start with Docker
+
+### Pull Pre-built Image
+```bash
+docker pull ghcr.io/breven217/mysql_mcp_server:latest
+```
+
 ## Features
 
 - Connect to local MySQL databases
@@ -21,8 +28,12 @@ A Model Context Protocol (MCP) server that allows AI assistants like Cascade to 
 
 ### Installation
 
+#### Option 1: Using Docker (Recommended)
+See the [Quick Start with Docker](#quick-start-with-docker) section above.
+
+#### Option 2: Manual Installation
 Install dependencies and build:
-```
+```bash
 make install
 ```
 
@@ -32,32 +43,37 @@ make install
 
 Cascade can automatically start and manage the server. Configure Cascade by adding this to your MCP configuration:
 
+#### Option 1: Using Docker (Recommended)
 ```json
 {
   "mcpServers": {
       "mysql": {
+          "command": "docker",
+          "args": [
+            "run",
+            "--rm",
+            "--env-file",
+            "/path/to/your/env",
+            "ghcr.io/breven217/mysql_mcp_server:latest"
+          ]
+      }
+  }
+}
+```
+
+#### Option 2: Using Local Installation
+
+```json
+{
+  "mcpServers": {
+       "mysql": {
           "command": "node",
           "args": [
-            "/Users/[user]/repos/MySQL_MCP_Server/build/index.js" // Path to the server
-          ],
-          "env": {
-            "WRITE_ACCESS": "true", // Set to "false" for read-only access
-            
-            // Local MySQL Configuration
-            "LOCAL_HOST": "localhost",
-            "LOCAL_USER": "[user]",
-            "LOCAL_PASSWORD": "[password]",
-            "LOCAL_PORT": "3306",
-            
-            // ODI MySQL Configuration (for remote access via SSH)
-            "ODI_SSH_KEY": "/path/to/.ssh/id_rsa",
-            "ODI_USER": "[user]",
-            "ODI_PASSWORD": "[password]",
-            "ODI_HOST": "127.0.0.1",
-            "ODI_PORT": "3306",
-            "ODI_SSH_PORT": "22"
-          }
-      }
+            "/path/to/your/server/build/index.js",
+            "--env-file",
+            "/path/to/your/env"
+          ]
+      },
   }
 }
 ```
@@ -81,28 +97,6 @@ This MCP server provides two main tools:
    - database: (optional) Database to query - if not specified, will show available databases
    - sshHost: SSH host to connect through (e.g., "171831.bjoyner.pandasandbox.com")
    - params: (optional) Parameters for the SQL query
-   ```
-
-### Using Manually
-
-1. Start the server:
-   ```
-   make up
-   ```
-
-2. Stop the server:
-   ```
-   make down
-   ```
-
-3. Check server status:
-   ```
-   make status
-   ```
-
-4. Run a custom SQL query:
-   ```
-   make query SQL="SELECT * FROM your_table"
    ```
 
 ## Examples
