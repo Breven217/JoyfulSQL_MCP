@@ -79,6 +79,24 @@ Cascade can automatically start and manage the server. Configure Cascade by addi
 }
 ```
 
+### ENV
+
+```
+LOCAL_HOST=[host]
+LOCAL_USER=[user]
+LOCAL_PASSWORD=[password]
+LOCAL_PORT=[port]
+
+ODI_SSH_KEY=[path/to/ssh/key]
+ODI_USER=[user]
+ODI_PASSWORD=[password]
+ODI_HOST=[host]
+ODI_PORT=[port]
+ODI_SSH_PORT=[ssh_tunnel_port]
+
+WRITE_ACCESS=[bool]
+```
+
 ### Available Tools
 
 This MCP server provides two main tools:
