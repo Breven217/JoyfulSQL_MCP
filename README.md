@@ -6,7 +6,7 @@ A Model Context Protocol (MCP) server that allows AI assistants like Cascade to 
 
 ### Pull Pre-built Image
 ```bash
-docker pull ghcr.io/breven217/mysql_mcp_server:latest
+docker pull ghcr.io/breven217/joyfulsql_mcp:latest
 ```
 
 ## Features
