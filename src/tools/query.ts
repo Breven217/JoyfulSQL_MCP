@@ -20,7 +20,7 @@ export default (server: McpServer, config: any) => {
 			params: z.array(z.string()).optional().describe("Parameters for the SQL query (optional)"),
 		},
 		{title: "Execute a SQL query on the local MySQL database"},
-	async ({ sql, database, params }: { sql: string; database?: string; params?: string[] }) => {
+	async ({ sql, database, params }) => {
 		// If database is specified in the tool call, use it instead of config.database
 		const dbToUse = database || config.database;
 		
