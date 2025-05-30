@@ -2,11 +2,17 @@
 
 A Model Context Protocol (MCP) server that allows AI assistants like Cascade to interact with both local and remote MySQL databases.
 
-## Quick Start with Docker
+## Quick Start
 
-### Pull Pre-built Image
+### Installation
+
+1. Clone the repository
+2. Install dependencies
+3. Build the server
+
 ```bash
-docker pull ghcr.io/breven217/joyfulsql_mcp:latest
+npm install
+npm run build
 ```
 
 ## Features
@@ -25,44 +31,13 @@ docker pull ghcr.io/breven217/joyfulsql_mcp:latest
 - Node.js
 - Local MySQL database (optional)
 - SSH access to remote MySQL databases (optional)
-
-### Installation
-
-#### Option 1: Using Docker (Recommended)
-See the [Quick Start with Docker](#quick-start-with-docker) section above.
-
-#### Option 2: Manual Installation
-Install dependencies and build:
-```bash
-make install
-```
+- SSH client installed on your local machine (for ODI connections)
 
 ## Usage
 
 ### Using with Cascade
 
 Cascade can automatically start and manage the server. Configure Cascade by adding this to your MCP configuration:
-
-#### Option 1: Using Docker (Recommended)
-```json
-{
-  "mcpServers": {
-      "mysql": {
-          "command": "docker",
-          "args": [
-            "run",
-            "--rm",
-            "-i",
-            "--env-file",
-            "/path/to/your/env",
-            "ghcr.io/breven217/mysql_mcp_server:latest"
-          ]
-      }
-  }
-}
-```
-
-#### Option 2: Using Local Installation
 
 ```json
 {
@@ -77,6 +52,14 @@ Cascade can automatically start and manage the server. Configure Cascade by addi
       },
   }
 }
+```
+
+### Running Locally
+
+You can also run the server directly:
+
+```bash
+node build/index.js
 ```
 
 ### ENV
@@ -165,3 +148,13 @@ database: "your_database_name"
 ## Security
 
 This server is intended for local development only. Do not expose it to the internet without proper security measures. The SSH tunneling provides an additional layer of security for remote database access.
+
+## Notes on SSH Tunneling
+
+When using the `odi_mysql_query` tool, the server will establish an SSH tunnel to the remote host. This requires:
+
+1. SSH client installed on your local machine
+2. Proper SSH configuration (keys, known_hosts, etc.)
+3. SSH access to the remote host
+
+The SSH tunnel will be automatically established when you make a query and closed when the server shuts down.
