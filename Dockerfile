@@ -1,5 +1,14 @@
 FROM node:20-alpine
 
+# Install SSH client and required dependencies
+RUN apk add --no-cache openssh-client ca-certificates
+
+# Set up SSH configuration for non-interactive use
+RUN mkdir -p /root/.ssh && \
+    chmod 700 /root/.ssh && \
+    echo "StrictHostKeyChecking no" > /root/.ssh/config && \
+    chmod 600 /root/.ssh/config
+
 WORKDIR /app
 
 # Copy package files and install dependencies
@@ -28,6 +37,10 @@ ENV ODI_PASSWORD=""
 ENV ODI_HOST="127.0.0.1"
 ENV ODI_PORT="3306"
 ENV ODI_SSH_PORT="22"
+
+# Create .ssh directory and set proper permissions
+RUN mkdir -p /root/.ssh && \
+    chmod 700 /root/.ssh
 
 # Run the MCP server
 CMD ["node", "build/index.js"]

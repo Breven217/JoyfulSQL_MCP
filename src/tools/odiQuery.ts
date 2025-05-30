@@ -1,14 +1,17 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import mysql from "mysql2/promise";
-import { spawn } from 'child_process';
 import { getAvailableDatabases, createNoDatabaseResponse, performQuery } from "../helpers/util.js";
 
+// Import ssh2 with require to avoid TypeScript errors
+const { Client } = require('ssh2');
+const fs = require('fs');
+
 // Store connection pools by database name
-let connectionPools: Map<string, mysql.Pool> = new Map();
+let connectionPools = new Map<string, any>();
 
 // Store SSH clients by host
-let sshClients: Map<string, any> = new Map();
+let sshClients = new Map<string, any>();
 
 // Store local ports used by SSH tunnels
 let nextLocalPort = 33306;
@@ -25,97 +28,138 @@ async function getAvailableDatabasesViaSsh(config: any, sshHost: string): Promis
   }
 }
 
-// Helper function to create a MySQL connection through SSH tunnel using native SSH command
-async function createSshTunnelConnection(config: any, sshHost: string, database: string): Promise<mysql.Pool> {
+// Helper function to create a MySQL connection through SSH tunnel using ssh2 package
+async function createSshTunnelConnection(config: any, sshHost: string, database: string): Promise<any> {
   // Create a unique connection key
   const connectionKey = `${sshHost}:${database}`;
   
   // Check if we already have a connection pool for this database
   if (connectionPools.has(connectionKey)) {
     console.log(`Reusing existing connection pool for ${connectionKey}`);
-    return connectionPools.get(connectionKey)!;
-  }
-  
-  // Check if we already have an SSH tunnel for this host
-  const sshKey = sshHost;
-  let localPort: number;
-  let sshProcess: any;
-  
-  if (sshClients.has(sshKey)) {
-    console.log(`Reusing existing SSH tunnel for ${sshKey}`);
-    sshProcess = sshClients.get(sshKey);
-    // Extract the local port from the existing SSH process
-    // This is a simplification - in a real implementation, you'd need to store the port with the process
-    localPort = nextLocalPort - 1;
-  } else {
-    // Create a new SSH tunnel
-    localPort = nextLocalPort++;
+    return connectionPools.get(connectionKey);
   }
 
-  return new Promise<mysql.Pool>((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     console.log(`Setting up SSH tunnel to ${sshHost}`);
     
-    // Use the native ssh command that's already working in your environment
-    // This will create a tunnel from localhost:localPort to remote 127.0.0.1:3306
-    sshProcess = spawn('ssh', [
-      '-v', // Verbose output for debugging
-      '-L', `${localPort}:127.0.0.1:3306`, // Port forwarding
-      '-N', // Don't execute a remote command
-      sshHost
-    ]);
+    // Create a new SSH client
+    const sshClient = new Client();
     
-    // Store the process for later use
-    sshClients.set(sshKey, sshProcess);
+    // Parse the SSH host string to extract username if present
+    let username = 'root';
+    let hostname = sshHost;
     
-    let errorOutput = '';
-    let stdoutOutput = '';
+    if (sshHost.includes('@')) {
+      const parts = sshHost.split('@');
+      username = parts[0];
+      hostname = parts[1];
+    }
     
-    sshProcess.stdout.on('data', (data: Buffer) => {
-      stdoutOutput += data.toString();
-      console.log(`SSH Output: ${data}`);
+    // Get SSH key path from environment variable or use default
+    const sshKeyPath = process.env.ODI_SSH_KEY || '/root/.ssh/id_rsa';
+    
+    console.log(`SSH connection details: ${username}@${hostname} using key ${sshKeyPath}`);
+    
+    // Set up event handlers
+    sshClient.on('ready', () => {
+      console.log('SSH connection established');
+      
+      // Create a unique local port for this connection
+      const localPort = nextLocalPort++;
+      
+      // Forward a connection from localhost:localPort to remote 127.0.0.1:3306
+      sshClient.forwardOut(
+        '127.0.0.1',  // Local bind address
+        localPort,    // Local bind port
+        '127.0.0.1',  // Remote MySQL host
+        3306,         // Remote MySQL port
+        (err: any, stream: any) => {
+          if (err) {
+            console.error('Port forwarding error:', err);
+            sshClient.end();
+            reject(err);
+            return;
+          }
+          
+          console.log(`Port forwarding established from localhost:${localPort} to remote 127.0.0.1:3306`);
+          
+          try {
+            // Create a connection pool using the forwarded port
+            const mysqlConfig = {
+              host: '127.0.0.1',
+              port: localPort,
+              user: process.env.ODI_USER || 'web',
+              password: process.env.ODI_PASSWORD || '',
+              database: database
+            };
+            
+            console.log('Creating MySQL connection with config:', {
+              host: mysqlConfig.host,
+              port: mysqlConfig.port,
+              user: mysqlConfig.user,
+              database: mysqlConfig.database
+            });
+            
+            const pool = mysql.createPool(mysqlConfig);
+            
+            // Store both the SSH client and the connection pool for later use
+            sshClients.set(sshHost, sshClient);
+            connectionPools.set(connectionKey, pool);
+            
+            console.log(`MySQL connection pool created through SSH tunnel`);
+            resolve(pool);
+          } catch (error) {
+            console.error('Error creating MySQL connection pool:', error);
+            sshClient.end();
+            reject(error);
+          }
+        }
+      );
     });
     
-    sshProcess.stderr.on('data', (data: Buffer) => {
-      errorOutput += data.toString();
-      console.error(`SSH Error: ${data}`);
+    sshClient.on('error', (err: any) => {
+      console.error('SSH connection error:', err);
+      reject(err);
     });
     
-    sshProcess.on('error', (error: Error) => {
-      console.error('Failed to start SSH process:', error);
+    // Connect to the SSH server
+    try {
+      const sshConfig: any = {
+        host: hostname,
+        port: parseInt(process.env.ODI_SSH_PORT || '22'),
+        username: username
+      };
+      
+      // Check if SSH key file exists
+      if (fs.existsSync(sshKeyPath)) {
+        console.log(`Using SSH key file: ${sshKeyPath}`);
+        sshConfig.privateKey = fs.readFileSync(sshKeyPath);
+      } else {
+        console.warn(`SSH key file ${sshKeyPath} not found, trying password authentication`);
+        // If no key file, try password from environment variable
+        if (process.env.ODI_SSH_PASSWORD) {
+          sshConfig.password = process.env.ODI_SSH_PASSWORD;
+        } else {
+          // If no password either, try agent authentication
+          console.warn('No SSH password found, trying agent authentication');
+          sshConfig.agent = process.env.SSH_AUTH_SOCK;
+        }
+      }
+      
+      console.log('Connecting to SSH with config:', {
+        host: sshConfig.host,
+        port: sshConfig.port,
+        username: sshConfig.username,
+        authMethod: sshConfig.privateKey ? 'privateKey' : 
+                   sshConfig.password ? 'password' : 
+                   sshConfig.agent ? 'agent' : 'none'
+      });
+      
+      sshClient.connect(sshConfig);
+    } catch (error) {
+      console.error('Error connecting to SSH:', error);
       reject(error);
-    });
-    
-    sshProcess.on('exit', (code: number | null, signal: string | null) => {
-      if (code !== 0 && signal !== 'SIGTERM') {
-        console.error(`SSH process exited with code ${code} and signal ${signal}`);
-        console.error(`Error output: ${errorOutput}`);
-        reject(new Error(`SSH tunnel failed with code ${code}`));
-        return;
-      }
-    });
-    
-    // Wait a bit for the tunnel to establish
-    setTimeout(() => {
-      try {
-        // Create a connection pool that connects through the SSH tunnel
-        const newPool = mysql.createPool({
-          host: '127.0.0.1', // Connect to local forwarded port
-          port: localPort,
-          user: process.env.ODI_USER || 'web',
-          password: process.env.ODI_PASSWORD,
-          database: database
-        });
-        
-        // Store the connection pool for reuse
-        connectionPools.set(connectionKey, newPool);
-        
-        console.log(`MySQL connection pool created through SSH tunnel on port ${localPort}`);
-        resolve(newPool);
-      } catch (error) {
-        console.error('Error creating MySQL connection pool:', error);
-        reject(error);
-      }
-    }, 5000); // Wait 5 seconds for the tunnel to establish
+    }
   });
 }
 
@@ -132,20 +176,24 @@ async function cleanupConnections() {
   }
   connectionPools.clear();
   
-  // Kill all SSH processes
-  for (const [key, process] of sshClients.entries()) {
+  // Close all SSH clients
+  for (const [key, client] of sshClients.entries()) {
     try {
-      process.kill();
-      console.log(`Killed SSH process for ${key}`);
+      client.end();
+      console.log(`Closed SSH client for ${key}`);
     } catch (error) {
-      console.error(`Error killing SSH process for ${key}:`, error);
+      console.error(`Error closing SSH client for ${key}:`, error);
     }
   }
   sshClients.clear();
+  
+  // Reset the local port counter
+  nextLocalPort = 33306;
 }
 
 // Global error handler to prevent crashes
-process.on('uncaughtException', (error) => {
+const process = require('process');
+process.on('uncaughtException', (error: any) => {
   console.error('Uncaught Exception:', error);
 });
 // Register cleanup handler for process exit
@@ -153,7 +201,7 @@ process.on('exit', () => {
   cleanupConnections();
 });
 
-export default (server: McpServer, config: any) => {
+export default (server: any, config: any) => {
   // Log configuration for debugging
   console.log('ODI MySQL Query Tool Configuration:', {
     host: config.host,
@@ -172,7 +220,7 @@ export default (server: McpServer, config: any) => {
       params: z.array(z.string()).optional().describe("Parameters for the SQL query (optional)"),
     },
     {title: "Execute a SQL query on the ODI MySQL database through SSH tunnel"},
-    async ({ sql, params, database, sshHost }) => {
+    async ({ sql, params, database, sshHost }: { sql: string, params?: string[], database?: string, sshHost: string }) => {
       // If no database was specified, query information_schema to get available databases
       // and return early to wait for the user to specify a database
       if (!database) {
